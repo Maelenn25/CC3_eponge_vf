@@ -264,6 +264,28 @@ plot_richness(ps, x="time", measures=c("Shannon", "Simpson"), color="traitement"
 plot_richness(ps, x="sample.names", measures=c("Shannon"), color="Eponge", shape = "traitement")
 ```
 
+# bar plot
+```{r}
+top20 <- names(sort(taxa_sums(ps2), decreasing=TRUE))[1:20]
+ps.top20 <- transform_sample_counts(ps2, function(OTU) OTU/sum(OTU))
+ps.top20 <- prune_taxa(top20, ps.top20)
+plot_bar(ps.top20, x="Espece", fill="Family") + facet_wrap(~traitement, scales="free_x")
+```
+
+```{r}
+top20 <- names(sort(taxa_sums(ps2), decreasing=TRUE))[1:20]
+ps.top20 <- transform_sample_counts(ps2, function(OTU) OTU/sum(OTU))
+ps.top20 <- prune_taxa(top20, ps.top20)
+plot_bar(ps.top20, x="Espece", fill="Order") + facet_wrap(~traitement, scales="free_x")
+```
+
+```{r}
+top20 <- names(sort(taxa_sums(ps2), decreasing=TRUE))[1:20]
+ps.top20 <- transform_sample_counts(ps2, function(OTU) OTU/sum(OTU))
+ps.top20 <- prune_taxa(top20, ps.top20)
+plot_bar(ps.top20, x="Espece", fill="Genus") + facet_wrap(~traitement, scales="free_x")
+```
+
 ## Filtrage de la taxonomie
 ```{r}
 ps <- subset_taxa(ps, !is.na(Phylum) & !Phylum %in% c("", "uncharacterized"))
