@@ -1,0 +1,294 @@
+---
+title: "R Notebook"
+output: 
+  github_document:
+    toc: true
+    toc_depth: 2
+---
+# Dada2
+## chargement des librairies
+```{r}
+library(dada2)
+library(phyloseq)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(ade4)
+library(ggrepel)
+library(lattice)
+library(caret)
+library(igraph)
+library(ggnetwork)
+theme_set(theme_bw())
+```
+
+```{r}
+sponge_metadata <- read.delim("SraRunTable.txt", header=TRUE, sep=",")
+```
+
+```{r}
+path <- "~/CC3_sponge/Samples" # CHANGE ME to the directory containing the fastq files after unzipping.
+list.files(path)
+```
+## filtration et éliminations des sequences basse qualité
+```{r}
+# Sort ensures forward/reverse reads are in same order
+fnFs <- sort(list.files(path, pattern="_1.fastq.gz"))
+fnRs <- sort(list.files(path, pattern="_2.fastq.gz"))
+# Extract sample names, assuming filenames have format: SAMPLENAME_XXX.fastq
+sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`,1)
+# Specify the full path to the fnFs and fnRs
+fnFs <- file.path(path, fnFs)
+fnRs <- file.path(path, fnRs)
+print(fnRs)
+```
+
+
+```{r}
+plotQualityProfile(fnFs[1:3])
+```
+
+```{r}
+plotQualityProfile(fnRs[1:3])
+```
+```{r}
+# Place filtered files in filtered/ subdirectory
+filtFs <- file.path(path, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
+filtRs <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+sample.names
+print(filtFs)
+```
+
+```{r}
+out<-filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(280,240),
+              maxN=0, maxEE=c(2,2), truncQ=2, rm.phix=TRUE,
+              compress=TRUE, multithread=TRUE) # On Windows set multithread=FALSE
+```
+```{r}
+head(out)
+```
+
+```{r}
+errF <- learnErrors(filtFs, multithread=TRUE)
+```
+
+```{r}
+errR <- learnErrors(filtRs, multithread=TRUE)
+```
+
+```{r}
+plotErrors(errF, nominalQ=TRUE)
+plotErrors(errR, nominalQ=TRUE)
+```
+
+```{r}
+dadaFs <- dada(filtFs, err=errF, multithread=TRUE)
+```
+
+```{r}
+dadaRs <- dada(filtRs, err=errR, multithread=TRUE)
+```
+
+```{r}
+dadaFs[[1]]
+```
+
+```{r}
+mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE)
+# Inspect the merger data.frame from the first sample
+head(mergers[[1]])
+```
+```{r}
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+```
+
+```{r}
+table(nchar(getSequences(seqtab)))
+```
+
+
+```{r}
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
+```
+
+```{r}
+dim(seqtab.nochim)
+```
+
+```{r}
+sum(seqtab.nochim)/sum(seqtab)
+```
+
+
+```{bash}
+wget https://zenodo.org/record/3986799/files/silva_nr99_v138_train_set.fa.gz?download=1
+```
+
+```{bash}
+wget https://zenodo.org/record/3986799/files/silva_species_assignment_v138.fa.gz?download=1
+```
+
+```{r}
+taxa <- assignTaxonomy(seqtab.nochim, "~/silva_nr99_v138_train_set.fa.gz?download=1", multithread=TRUE)
+```
+
+```{r}
+taxa <- addSpecies(taxa, "~/silva_species_assignment_v138.fa.gz?download=1")
+```
+
+```{r}
+theme_set(theme_bw())
+```
+```{r}
+samples.out <- rownames(seqtab.nochim)
+```
+```{r}
+subject <- samples.out
+```
+
+```{r}
+subject2 <- substr(subject,4,5)
+print(subject2)
+```
+```{r}
+espece <- substr(subject,0,2)
+print(espece)
+```
+
+```{r}
+samdf <- data.frame(Subject=subject, Number=subject2, Espece=espece)
+samdf$time[samdf$Number=="06"] <- "168h"
+samdf$time[samdf$Number=="03"] <- "168h"
+samdf$time[samdf$Number=="01"] <- "168h"
+samdf$time[samdf$Number=="02"] <- "168h"
+samdf$time[samdf$Number=="04"] <- "168h"
+samdf$time[samdf$Number=="05"] <- "168h"
+samdf$time[samdf$Number=="07"] <- "24h"
+samdf$time[samdf$Number=="08"] <- "24h"
+samdf$time[samdf$Number=="09"] <- "24h"
+samdf$time[samdf$Number=="10"] <- "24h"
+samdf$time[samdf$Number=="11"] <- "24h"
+samdf$time[samdf$Number=="16"] <- "24h"
+samdf$time[samdf$Number=="12"] <- "avant"
+samdf$time[samdf$Number=="13"] <- "avant"
+samdf$time[samdf$Number=="14"] <- "avant"
+samdf$time[samdf$Number=="15"] <- "avant"
+samdf$time[samdf$Number=="17"] <- "avant"
+samdf$time[samdf$Number=="18"] <- "avant"
+samdf$traitement[samdf$Number=="18"] <- "pulse"
+samdf$traitement[samdf$Number=="06"] <- "pulse"
+samdf$traitement[samdf$Number=="03"] <- "pulse"
+samdf$traitement[samdf$Number=="01"] <- "pulse"
+samdf$traitement[samdf$Number=="11"] <- "pulse"
+samdf$traitement[samdf$Number=="09"] <- "pulse"
+samdf$traitement[samdf$Number=="07"] <- "pulse"
+samdf$traitement[samdf$Number=="17"] <- "pulse"
+samdf$traitement[samdf$Number=="12"] <- "pulse"
+samdf$traitement[samdf$Number=="05"] <- "controle"
+samdf$traitement[samdf$Number=="04"] <- "controle"
+samdf$traitement[samdf$Number=="02"] <- "controle"
+samdf$traitement[samdf$Number=="16"] <- "controle"
+samdf$traitement[samdf$Number=="10"] <- "controle"
+samdf$traitement[samdf$Number=="08"] <- "controle"
+samdf$traitement[samdf$Number=="15"] <- "controle"
+samdf$traitement[samdf$Number=="13"] <- "controle"
+samdf$traitement[samdf$Number=="14"] <- "controle"
+samdf$Eponge[samdf$Espece=="CY"] <- "C. concentrica"
+samdf$Eponge[samdf$Espece=="AQ"] <- "A. queenslandica"
+samdf$Eponge[samdf$Espece=="CO"] <- "C. mathewsi"
+samdf$Eponge[samdf$Espece=="IB"] <- "I. basta"
+samdf$Eponge[samdf$Espece=="IR"] <- "I. ramosa"
+samdf$Eponge[samdf$Espece=="ST"] <- "S. flabelliformis"
+rownames(samdf) <-samples.out
+```
+
+
+
+```{r}
+ps <-phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE),
+sample_data(samdf),
+tax_table(taxa))
+ps <-prune_samples(sample_names(ps) != "Mock", ps) # Remove mock sample
+```
+
+```{r}
+dna <- Biostrings::DNAStringSet(taxa_names(ps))
+names(dna) <- taxa_names(ps)
+ps <- merge_phyloseq(ps, dna)
+taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
+ps
+```
+
+```{r}
+plot_richness(ps, x="time", measures=c("Shannon", "Simpson"), color="Espece")
+```
+
+```{r}
+plot_richness(ps, x="time", measures=c("Shannon", "Simpson"), color="Eponge", shape = "traitement")
+```
+```{r}
+plot_richness(ps, x="sample.names", measures=c("Shannon"), color="Eponge", shape = "traitement")
+```
+
+```{r}
+pslog <-transform_sample_counts(ps, function(x) log(1 + x))
+out.wuf.log <-ordinate(pslog, method = "PCoA", distance = "bray")
+```
+```{r}
+evals <-out.wuf.log$values$Eigenvalues
+plot_ordination(pslog, out.wuf.log, color = "Espece", shape="traitement") + labs(col = "Espece",shape="traitement")
+```
+```{r}
+evals <-out.wuf.log$values$Eigenvalues
+plot_ordination(pslog, out.wuf.log, color = "Espece", shape="time") + labs(col = "Espece",shape="time")
+```
+
+```{r}
+# Transform data to proportions as appropriate for Bray-Curtis distances
+ps.prop <- transform_sample_counts(ps, function(otu) otu/sum(otu))
+ord.nmds.bray <- ordinate(ps.prop, method="NMDS", distance="bray")
+```
+```{r}
+plot_ordination(ps.prop, ord.nmds.bray, color="Espece", shape="traitement", title="Bray NMDS")
+```
+```{r}
+top20 <- names(sort(taxa_sums(ps), decreasing=TRUE))[1:100]
+ps.top20 <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU))
+ps.top20 <- prune_taxa(top20, ps.top20)
+plot_bar(ps.top20, x="Espece", fill="Phylum") + facet_wrap(~traitement, scales="free_x")
+
+```
+
+```{r}
+top20 <- names(sort(taxa_sums(ps), decreasing=TRUE))[1:100]
+ps.top20 <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU))
+ps.top20 <- prune_taxa(top20, ps.top20)
+plot_bar(ps.top20, x="Espece", fill="Order") + facet_wrap(~traitement, scales="free_x")
+
+```
+
+```{r}
+top20 <- names(sort(taxa_sums(ps), decreasing=TRUE))[1:100]
+ps.top20 <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU))
+ps.top20 <- prune_taxa(top20, ps.top20)
+plot_bar(ps.top20, x="Espece", fill="Family") + facet_wrap(~traitement, scales="free_x")
+
+```
+
+
+```{r}
+net <- make_network(ps, max.dist=0.8)
+sampledata <- data.frame(sample_data(ps))
+V(net)$Eponge <- sampledata[names(V(net)), "Espece"]
+V(net)$time <- sampledata[names(V(net)), "traitement"]
+net_graph <- ggnetwork(net)
+ggplot(net_graph, aes(x = x, y = y, xend = xend, yend = yend), layout = "fruchtermanreingold") +
+  geom_edges(color = "darkgray") +
+  geom_nodes(aes(color = Eponge, shape = time),  size = 3 ) +
+  theme(axis.text = element_blank(), axis.title = element_blank(),
+        legend.key.height = unit(0.5,"line")) +
+  guides(col = guide_legend(override.aes = list(size = .5)))
+```
